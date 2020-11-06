@@ -8,10 +8,10 @@ namespace MicrosoftFaster
 {
     public class FasterDb : IDisposable
     {
-        private readonly FasterKV<FasterKey, FasterValue> _fasterKv;
+        private readonly FasterKV<FasterData, FasterData> _fasterKv;
         private readonly IDevice _log;
         private readonly IDevice _objLog;
-        private readonly ClientSession<FasterKey, FasterValue, FasterValue, FasterValue, Empty, IFunctions<FasterKey, FasterValue, FasterValue, FasterValue, Empty>> _session;
+        private readonly ClientSession<FasterData, FasterData, FasterData, FasterData, Empty, IFunctions<FasterData, FasterData, FasterData, FasterData, Empty>> _session;
 
         public FasterDb(string fileName)
         {
@@ -19,7 +19,7 @@ namespace MicrosoftFaster
             _log = Devices.CreateLogDevice(@$"{fileName}\{nameof(FasterDb)}.log");
             _objLog = Devices.CreateLogDevice(@$"{fileName}\{nameof(FasterDb)}-obj.log");
             _fasterKv = new FasterKV
-                <FasterKey, FasterValue>(
+                <FasterData, FasterData>(
                     logSize,
                     new LogSettings
                     {
@@ -33,10 +33,10 @@ namespace MicrosoftFaster
                     {
                         CheckpointDir = $"{fileName}/Checkpoints"
                     },
-                    new SerializerSettings<FasterKey, FasterValue>
+                    new SerializerSettings<FasterData, FasterData>
                     {
-                        keySerializer = () => new FasterKeySerializer(),
-                        valueSerializer = () => new FasterValueSerializer()
+                        keySerializer = () => new FasterDataSerializer(),
+                        valueSerializer = () => new FasterDataSerializer()
                     }
                 );
 
@@ -45,38 +45,38 @@ namespace MicrosoftFaster
                 _fasterKv.Recover();
             }
 
-            _session = _fasterKv.NewSession(new SimpleFunctions<FasterKey, FasterValue>());
+            _session = _fasterKv.NewSession(new SimpleFunctions<FasterData, FasterData>());
         }
 
         public void Put(string key, byte[] data)
         {
-            _session.Upsert(new FasterKey()
+            _session.Upsert(new FasterData()
             {
-                Key = Encoding.UTF8.GetBytes(key)
-            }, new FasterValue()
+                Data = Encoding.UTF8.GetBytes(key)
+            }, new FasterData()
             {
-                Value = data
+                Data = data
             });
         }
 
         public byte[] Get(string key)
         {
-            var storeValue = _session.Read(new FasterKey()
+            var storeValue = _session.Read(new FasterData()
             {
-                Key = Encoding.UTF8.GetBytes(key)
+                Data = Encoding.UTF8.GetBytes(key)
             });
 
-            return storeValue.Item2.Value;
+            return storeValue.Item2.Data;
         }
 
         public async Task PutAsync(string key, byte[] data)
         {
-            var result = await _session.RMWAsync(new FasterKey()
+            var result = await _session.RMWAsync(new FasterData()
             {
-                Key = Encoding.UTF8.GetBytes(key)
-            }, new FasterValue()
+                Data = Encoding.UTF8.GetBytes(key)
+            }, new FasterData()
             {
-                Value = data
+                Data = data
             });
 
             await result.CompleteAsync();
@@ -84,25 +84,24 @@ namespace MicrosoftFaster
 
         public async ValueTask<byte[]> GetAsync(string key)
         {
-            var result = await _session.ReadAsync(new FasterKey()
+            var result = await _session.ReadAsync(new FasterData()
             {
-                Key = Encoding.UTF8.GetBytes(key)
+                Data = Encoding.UTF8.GetBytes(key)
             });
 
             var (status, data) = result.Complete();
 
-            return status == Status.OK ? data.Value : default;
+            return status == Status.OK ? data.Data : default;
         }
 
 
 
-        public async ValueTask<bool> CheckpointAsync()
+        public async ValueTask<bool> SaveCheckpointAsync()
         {
             //(bool isSuccess, _) = await _fasterKv.TakeFullCheckpointAsync(CheckpointType.Snapshot);
             (bool isSuccess, _) = await _fasterKv.TakeHybridLogCheckpointAsync(CheckpointType.Snapshot);
             await _fasterKv.CompleteCheckpointAsync();
             return isSuccess;
-            //return true;
         }
 
         public void Dispose()

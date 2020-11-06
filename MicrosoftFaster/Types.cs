@@ -4,25 +4,24 @@ using System.Linq;
 
 namespace MicrosoftFaster
 {
-    internal class FasterKey : IFasterEqualityComparer<FasterKey>
+    internal class FasterData : IFasterEqualityComparer<FasterData>
     {
-        public byte[] Key { get; set; }
-        public long GetHashCode64(ref FasterKey k)
+        public byte[] Data { get; set; }
+        public long GetHashCode64(ref FasterData data)
         {
-            Key = k.Key;
-            var hash256 = Hash256(Key);
+            Data = data.Data;
+            var hash256 = Hash256(Data);
             long res = 0;
             foreach (var bt in hash256)
             {
                 res = res * 31 * 31 * bt + 17;
             }
-
             return res;
         }
 
-        public bool Equals(ref FasterKey k1, ref FasterKey k2)
+        public bool Equals(ref FasterData d1, ref FasterData d2)
         {
-            return k1.Key.SequenceEqual(k2.Key);
+            return d1.Data.SequenceEqual(d2.Data);
         }
 
         private static byte[] Hash256(byte[] byteContents)
@@ -32,48 +31,20 @@ namespace MicrosoftFaster
         }
     }
 
-    internal class FasterKeySerializer : BinaryObjectSerializer<FasterKey>
+    internal class FasterDataSerializer : BinaryObjectSerializer<FasterData>
     {
-        public override void Deserialize(out FasterKey obj)
+        public override void Deserialize(out FasterData data)
         {
-            obj = new FasterKey();
-
-            var bytes = new byte[4];
-            reader.Read(bytes, 0, 4);
-            var size = BitConverter.ToInt32(bytes, 0);
-            obj.Key = new byte[size];
-            reader.Read(obj.Key, 0, size);
+            data = new FasterData();
+            var size = BitConverter.ToInt32(reader.ReadBytes(sizeof(int)), 0);
+            data.Data = reader.ReadBytes(size);
         }
 
-        public override void Serialize(ref FasterKey obj)
+        public override void Serialize(ref FasterData data)
         {
-            var len = BitConverter.GetBytes(obj.Key.Length);
-            writer.Write(len);
-            writer.Write(obj.Key);
-        }
-    }
-
-    internal class FasterValue
-    {
-        public byte[] Value;
-    }
-
-    internal class FasterValueSerializer : BinaryObjectSerializer<FasterValue>
-    {
-        public override void Deserialize(out FasterValue obj)
-        {
-            obj = new FasterValue();
-            var bytes = new byte[4];
-            reader.Read(bytes, 0, 4);
-            var size = BitConverter.ToInt32(bytes, 0);
-            obj.Value = reader.ReadBytes(size);
-        }
-
-        public override void Serialize(ref FasterValue obj)
-        {
-            var len = BitConverter.GetBytes(obj.Value.Length);
-            writer.Write(len);
-            writer.Write(obj.Value);
+            var length = BitConverter.GetBytes(data.Data.Length);
+            writer.Write(length);
+            writer.Write(data.Data);
         }
     }
 }
